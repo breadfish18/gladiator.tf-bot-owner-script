@@ -1293,6 +1293,39 @@
     node.appendChild(container);
   }
 
+  function handleListingTooltips(node) {
+    const found = node.querySelector(
+      ".item-tooltip__content__suggested-value__long-price"
+    );
+
+    if (found) {
+      const existing = found.querySelector(".glad-item-tooltip-container");
+
+      if (existing) return;
+
+      const item = node.querySelector(".item-tooltip");
+
+      const container = document.createElement("a");
+      container.className = "glad-item-tooltip-container";
+
+      const iconContainer = document.createElement("div");
+      iconContainer.className = "glad-item-tooltip-logo-container";
+      iconContainer.innerHTML = LOGO_SVG;
+
+      container.append(iconContainer);
+
+      const label = document.createElement("span");
+
+      label.innerText = getAddLabel();
+      label.className = "glad-item-tooltip-text";
+      container.append(label);
+
+      container.href = getAddLink(item.__vue__._props.item.name);
+      container.target = "_blank";
+
+      found.append(container);
+    }
+  }
   function addLinksNext() {
     const statsItem = document.querySelector(
       ".card__content .header div .align-items-start > div"
@@ -1354,39 +1387,8 @@
 
         for (const node of mutation.addedNodes) {
           if (node.classList?.contains("tippy-popper")) {
-            const found = node.querySelector(
-              ".item-tooltip__content__suggested-value__long-price"
-            );
-
-            if (found) {
-              const existing = found.querySelector(
-                ".glad-item-tooltip-container"
-              );
-
-              if (existing) continue;
-
-              const item = node.querySelector(".item-tooltip");
-
-              const container = document.createElement("a");
-              container.className = "glad-item-tooltip-container";
-
-              const iconContainer = document.createElement("div");
-              iconContainer.className = "glad-item-tooltip-logo-container";
-              iconContainer.innerHTML = LOGO_SVG;
-
-              container.append(iconContainer);
-
-              const label = document.createElement("span");
-
-              label.innerText = getAddLabel();
-              label.className = "glad-item-tooltip-text";
-              container.append(label);
-
-              container.href = getAddLink(item.__vue__._props.item.name);
-              container.target = "_blank";
-
-              found.append(container);
-            }
+            handleListingTooltips(node);
+            continue;
           }
 
           if (node.id === "content") {
