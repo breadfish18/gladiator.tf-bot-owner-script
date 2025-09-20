@@ -317,6 +317,7 @@
       bots: {},
       lastCache: 0,
       isKillstreakChecked: false,
+      isUnuOnlyChecked: false,
     },
 
     async load() {
@@ -1037,30 +1038,26 @@
     addAllButton.href = `${window.location.origin}/items/${baseItemName}`;
     createGladiatorButton(addAllButton, "Add all Variants");
 
-    const container = createButtonWrapperNext([button, addAllButton]);
+    const container = createButtonWrapperNext([button, addAllButton], "pt-2");
 
     statsItem.appendChild(container);
   }
 
-  function createKillstreakCheckbox() {
-    const killstreakCheckbox = document.createElement("input");
-    killstreakCheckbox.type = "checkbox";
-    killstreakCheckbox.id = "add-ks";
-    killstreakCheckbox.name = "add-ks";
+  function createCheckbox(id, checked, onChange, labelText) {
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.id = id;
+    checkbox.name = id;
+    checkbox.value = id;
+    checkbox.checked = checked;
+    checkbox.addEventListener("change", onChange);
 
-    killstreakCheckbox.value = "add-ks";
-    killstreakCheckbox.checked = Settings.data.isKillstreakChecked;
-    killstreakCheckbox.addEventListener("change", (e) => {
-      Settings.data.isKillstreakChecked = e.target.checked;
-      Settings.save();
-    });
+    const label = document.createElement("label");
+    label.htmlFor = id;
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(labelText));
 
-    const killstreakLabel = document.createElement("label");
-    killstreakLabel.htmlFor = "add-ks";
-    killstreakLabel.textContent = "Add Killstreaks";
-    killstreakLabel.appendChild(killstreakCheckbox);
-
-    return killstreakLabel;
+    return label;
   }
 
   function addAddAllButtonNext(node) {
@@ -1073,41 +1070,8 @@
     const addUnpricedButton = document.createElement("button");
     createGladiatorButton(addUnpricedButton, "Add Unpriced Items");
 
-    const killstreakLabel = createKillstreakCheckbox();
+    const checkboxContainer = modifierCheckboxes();
 
-    function isValidItem(item) {
-      const unuWeaponIds = [701, 702, 703, 704];
-
-      return (
-        !item.texture &&
-        !item.wearTear &&
-        !unuWeaponIds.includes(item.particle?.id)
-      );
-    }
-
-    function getItems() {
-      const items = document.querySelectorAll(".item");
-      let mappedItems = Array.from(items)
-        .filter((item) => isValidItem(item.__vue__._props.item))
-        .map((item) => ({
-          name: item.__vue__._props.item.name,
-          unpriced: item.__vue__._props.inline,
-        }));
-
-      if (Settings.data.isKillstreakChecked) {
-        mappedItems = mappedItems.flatMap((item) => {
-          return [
-            item,
-            ...generateKillstreaks(item.name).map((name) => ({
-              name,
-              unpriced: item.unpriced,
-            })),
-          ];
-        });
-      }
-
-      return mappedItems;
-    }
     addAllButton.addEventListener("click", () => {
       const items = getItems();
       if (items.length > 0) {
@@ -1132,12 +1096,10 @@
       }
     });
 
-    const container = createButtonWrapperNext([
-      addPriceButton,
-      addUnpricedButton,
-      addAllButton,
-      killstreakLabel,
-    ]);
+    const container = createButtonWrapperNext(
+      [addPriceButton, addUnpricedButton, addAllButton, checkboxContainer],
+      "p-4"
+    );
 
     node.appendChild(container);
   }
@@ -1149,9 +1111,10 @@
     }`;
   }
 
-  function createButtonWrapperNext(buttons) {
+  function createButtonWrapperNext(buttons, className = "") {
     const containerContainer = document.createElement("div");
-    containerContainer.className = "p-2";
+    containerContainer.className = className;
+    containerContainer.style.flex = "0 1 100%";
 
     const containerTitle = document.createElement("h4");
     containerTitle.textContent = getAddLabel();
@@ -1160,6 +1123,7 @@
     const container = document.createElement("div");
     container.className =
       "p-toolbar justify-content-start flex-column glad-align-items-start";
+    container.style.maxWidth = "max-content";
 
     const buttonsWrapper = document.createElement("div");
     buttonsWrapper.className = "d-flex justify-content-start gap-2";
@@ -1174,7 +1138,7 @@
 
     containerContainer.appendChild(container);
 
-    return container;
+    return containerContainer;
   }
 
   function handleListingNode(listing) {
@@ -1247,25 +1211,170 @@
     `;
   }
 
+  /**
+   *
+   * @param {{label: string, value: string}[]} options
+   * @param {string|null} selected
+   * @param {string} textLabel
+   * @returns
+   */
+  function injectNextDropdown(options, selected, textLabel = "Select") {
+    const dropdown = document.createElement("div");
+    dropdown.className =
+      "p-dropdown p-component p-inputwrapper p-inputwrapper-filled p-inputwrapper-focus";
+    dropdown.style.position = "relative";
+
+    const hiddenInputWrapper = document.createElement("div");
+    hiddenInputWrapper.className = "p-hidden-accessible";
+    const hiddenInput = document.createElement("input");
+    hiddenInput.type = "text";
+    hiddenInput.readOnly = true;
+    hiddenInput.value = selected;
+    hiddenInput.name = "manageContext";
+    hiddenInput.id = "manageContext";
+    hiddenInputWrapper.appendChild(hiddenInput);
+
+    const label = document.createElement("span");
+    label.className = "p-dropdown-label p-inputtext";
+    label.textContent =
+      options.find((option) => option.value === selected)?.label ?? textLabel;
+
+    const trigger = document.createElement("div");
+    trigger.setAttribute("role", "button");
+    trigger.className = "p-dropdown-trigger";
+    const triggerIcon = document.createElement("span");
+    triggerIcon.className = "p-dropdown-trigger-icon pi pi-chevron-down";
+    trigger.appendChild(triggerIcon);
+
+    const panel = document.createElement("div");
+    panel.className = "p-dropdown-panel p-component";
+    panel.style.zIndex = "1009";
+    panel.style.transformOrigin = "center top 0px";
+    panel.style.position = "absolute";
+    panel.style.minWidth = "100px";
+    panel.style.display = "none";
+
+    const itemsWrapper = document.createElement("div");
+    itemsWrapper.className = "p-dropdown-items-wrapper";
+    itemsWrapper.style.maxHeight = "200px";
+    itemsWrapper.style.overflowY = "auto";
+
+    const itemsList = document.createElement("ul");
+    itemsList.setAttribute("role", "listbox");
+    itemsList.className = "p-dropdown-items";
+
+    function updateSelection(option) {
+      selected = option.value;
+      hiddenInput.value = option.value;
+      label.textContent = option.label;
+      Array.from(itemsList.children).forEach((li) => {
+        if (option.value === li.value) {
+          li.classList.add("p-highlight");
+          label.textContent = option.label;
+        } else {
+          li.classList.remove("p-highlight");
+        }
+      });
+      panel.style.display = "none";
+    }
+
+    options.forEach((option) => {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.value = option.value;
+      li.className =
+        "p-dropdown-item" + (option.value === selected ? " p-highlight" : "");
+      li.textContent = option.label;
+
+      itemsList.appendChild(li);
+
+      li.addEventListener("click", (e) => {
+        e.stopPropagation();
+        updateSelection(option);
+      });
+    });
+
+    itemsWrapper.appendChild(itemsList);
+    panel.appendChild(itemsWrapper);
+
+    dropdown.appendChild(hiddenInputWrapper);
+    dropdown.appendChild(label);
+    dropdown.appendChild(trigger);
+
+    // Append panel to body for overflow
+    document.body.appendChild(panel);
+
+    function positionPanel() {
+      const rect = dropdown.getBoundingClientRect();
+      panel.style.minWidth = rect.width + "px";
+      panel.style.left = rect.left + "px";
+      panel.style.top = rect.bottom + "px";
+    }
+
+    dropdown.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (panel.style.display === "none") {
+        positionPanel();
+        panel.style.display = "";
+      } else {
+        panel.style.display = "none";
+      }
+    });
+
+    document.addEventListener("click", (e) => {
+      if (panel.style.display !== "none") {
+        panel.style.display = "none";
+      }
+    });
+
+    return dropdown;
+  }
+
   function settingFormNext() {
     const form = document.createElement("form");
-    form.className = "d-flex flex-column gap-2";
-    form.innerHTML = renderSettingsFormNext();
+    form.className = "d-flex flex-column gap-2 pb-4";
+    form.style.minWidth = "300px";
+
+    function createDropdown() {
+      return injectNextDropdown(
+        Object.entries(Settings.data.bots).map(([name, id]) => ({
+          label: name,
+          value: id,
+        })),
+        Settings.data.manageContext,
+        "Select Bot"
+      );
+    }
+
+    let manageContextDropdown = createDropdown();
 
     const refreshButton = document.createElement("button");
     refreshButton.className = "btn btn-outline-brand me-1 w-fit";
     refreshButton.textContent = "Refresh Bots";
     refreshButton.type = "button";
 
+    const manageContextLabel = document.createElement("label");
+    manageContextLabel.style.fontWeight = "semibold";
+    manageContextLabel.textContent = "Choose Your Bot";
+
+    const manageContextContainer = document.createElement("div");
+    manageContextContainer.className = "d-flex flex-column gap-2";
+    manageContextContainer.appendChild(manageContextDropdown);
+
     refreshButton.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
       Settings.data.lastCache = 0;
       getBots().then(() => {
-        form.innerHTML = renderSettingsFormNext();
-        form.appendChild(refreshButton);
+        manageContextContainer.removeChild(manageContextDropdown);
+        manageContextDropdown = createDropdown();
+
+        manageContextContainer.appendChild(manageContextDropdown);
       });
     });
+
+    form.appendChild(manageContextLabel);
+    form.appendChild(manageContextContainer);
     form.appendChild(refreshButton);
 
     return form;
@@ -1274,10 +1383,10 @@
   function addSettingsButtonNext(node) {
     const button = document.createElement("button");
     button.className = "btn btn-outline-brand me-1";
-
     button.innerHTML = LOGO_SVG;
+
     const submitButton = document.createElement("button");
-    submitButton.className = "btn btn-outline-brand me-1";
+    submitButton.className = "btn btn-outline-brand";
     submitButton.textContent = "Submit";
 
     const form = settingFormNext();
@@ -1295,23 +1404,76 @@
     node.prepend(button);
   }
 
-  function getPricelistItemNames() {
-    const rows = [...document.querySelectorAll("tbody tr")];
-    let itemNames = rows.map((row) => {
-      const firstCell = row.childNodes[0];
-      return firstCell.__vue__._props.rowData.item.name;
-    });
+  function isValidItem(item) {
+    const unuWeaponIds = [701, 702, 703, 704];
+
+    return (
+      !item.texture &&
+      !item.wearTear &&
+      !unuWeaponIds.includes(item.particle?.id)
+    );
+  }
+
+  function getItems() {
+    const items = document.querySelectorAll(".item");
+    let mappedItems = Array.from(items)
+      .filter((item) => isValidItem(item.__vue__._props.item))
+      .map((item) => ({
+        name: item.__vue__._props.item.name,
+        unpriced: !item.__vue__._props.item.price.community,
+        quality: item.__vue__._props.item.quality.id,
+      }));
+
+    if (Settings.data.isUnuOnlyChecked) {
+      mappedItems = mappedItems.filter((item) => item.quality === 5);
+    }
 
     if (Settings.data.isKillstreakChecked) {
-      console.log("Adding killstreaks");
-      itemNames = itemNames.flatMap((item) => {
-        console.log("Adding killstreaks", item, generateKillstreaks(item));
+      mappedItems = mappedItems.flatMap((item) => {
+        if (!isWeapon(item.name)) {
+          return [item];
+        }
 
-        return [item, ...generateKillstreaks(item)];
+        return [
+          item,
+          ...generateKillstreaks(item.name).map((name) => ({
+            name,
+            unpriced: item.unpriced,
+            quality: item.quality,
+          })),
+        ];
       });
     }
 
-    return itemNames;
+    return mappedItems;
+  }
+
+  function modifierCheckboxes() {
+    const checkboxContainer = document.createElement("div");
+    checkboxContainer.className = "d-flex flex-column gap-2";
+
+    const ksCheckbox = createCheckbox(
+      "add-ks",
+      Settings.data.isKillstreakChecked,
+      (e) => {
+        Settings.data.isKillstreakChecked = e.target.checked;
+        Settings.save();
+      },
+      " Add Killstreaks"
+    );
+    const unuOnlyCheckbox = createCheckbox(
+      "add-unu",
+      Settings.data.isUnuOnlyChecked,
+      (e) => {
+        Settings.data.isUnuOnlyChecked = e.target.checked;
+        Settings.save();
+      },
+      " Add Unusuals Only"
+    );
+    checkboxContainer.appendChild(ksCheckbox);
+    checkboxContainer.appendChild(unuOnlyCheckbox);
+
+    return checkboxContainer;
   }
 
   function addPricelistButtonsNext(node) {
@@ -1319,9 +1481,9 @@
     createGladiatorButton(button, "Add Current Page");
 
     button.addEventListener("click", () => {
-      const itemNames = getPricelistItemNames();
-      if (itemNames.length > 0) {
-        bulkAdd(itemNames);
+      const items = getItems();
+      if (items.length > 0) {
+        bulkAdd(items.map((item) => item.name));
       }
     });
     const addAllCurrentPageButton = document.createElement("button");
@@ -1335,13 +1497,12 @@
       }
     });
 
-    const ksCheckbox = createKillstreakCheckbox();
+    const checkboxContainer = modifierCheckboxes();
 
-    const container = createButtonWrapperNext([
-      button,
-      addAllCurrentPageButton,
-      ksCheckbox,
-    ]);
+    const container = createButtonWrapperNext(
+      [button, addAllCurrentPageButton, checkboxContainer],
+      "p-1"
+    );
 
     node.appendChild(container);
   }
@@ -1492,7 +1653,8 @@
           );
           if (isLoadingOverlay) {
             // Pricelist just finished loading current page.
-            const itemNames = getPricelistItemNames();
+            const items = getItems();
+            const itemNames = items.map((item) => item.name);
             if (PageState.paginating) {
               PageState.itemNames.push(...itemNames);
               const nextButton = document.querySelector(".p-paginator-next");
@@ -1555,11 +1717,6 @@
 
     let nonItemName = baseName.replace(itemName, "");
     itemName = itemName.replace("The ", "");
-
-    // Use base item name
-    if (!WEAPONS.includes(itemName)) {
-      return [];
-    }
 
     ks.push(`${nonItemName}Professional Killstreak ${itemName}`);
     ks.push(`${nonItemName}Specialized Killstreak ${itemName}`);
