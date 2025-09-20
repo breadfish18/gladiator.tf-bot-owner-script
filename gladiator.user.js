@@ -18,7 +18,8 @@
 // @supportURL      https://github.com/gladiatortf/gladiator.tf-bot-owner-script/issues
 
 // @run-at       document-end
-// @match        https://*.backpack.tf/*
+// @match        https://backpack.tf/*
+// @match        https://next.backpack.tf/*
 // @match        https://gladiator.tf/*
 
 // ==/UserScript==
@@ -125,7 +126,7 @@
     "Flying Guillotine",
     "Backburner",
     "Equalizer",
-    "Claidheamh MÃ²r",
+    "Claidheamh Mòr",
     "Back Scratcher",
     "Bottle",
     "Persian Persuader",
@@ -315,6 +316,7 @@
       manageContext: "my",
       bots: {},
       lastCache: 0,
+      isKillstreakChecked: false,
     },
 
     async load() {
@@ -334,11 +336,8 @@
 
   const PageState = {
     currentPage: "",
-    variantsLoaded: false,
-    unpricedVariantsLoaded: false,
     paginating: false,
     itemNames: [],
-    addKillstreaks: false,
   };
 
   const LOGGER = {
@@ -414,9 +413,41 @@
     ]);
   }
 
+  function isEffectOrItemPage(pathname) {
+    // only show on individual effect/item pages
+    return (
+      (pathname.startsWith("/effects/") &&
+        pathname.length > "/effects/".length) ||
+      (pathname.startsWith("/items/") && pathname.length > "/items/".length)
+    );
+  }
+
+  function computeCurrentPage(pathname) {
+    PageState.paginating = false;
+
+    switch (true) {
+      case pathname === "/stats":
+        PageState.currentPage = "stats";
+        break;
+      case pathname === "/classifieds":
+        PageState.currentPage = "classified";
+        break;
+      case isEffectOrItemPage(pathname):
+        PageState.currentPage = "items";
+        break;
+      case pathname === "/pricelist":
+        PageState.currentPage = "pricelist";
+        break;
+      default:
+        PageState.currentPage = "";
+        break;
+    }
+  }
+
   function backpackUserscript(pathname) {
     if (isNext) {
       LOGGER.info("On next site");
+      computeCurrentPage(pathname);
       GM_addStyle(NEXT_CSS);
       injectNextModal();
       addLinksNext();
@@ -1018,9 +1049,10 @@
     killstreakCheckbox.name = "add-ks";
 
     killstreakCheckbox.value = "add-ks";
-    killstreakCheckbox.checked = PageState.addKillstreaks;
+    killstreakCheckbox.checked = Settings.data.isKillstreakChecked;
     killstreakCheckbox.addEventListener("change", (e) => {
-      PageState.addKillstreaks = e.target.checked;
+      Settings.data.isKillstreakChecked = e.target.checked;
+      Settings.save();
     });
 
     const killstreakLabel = document.createElement("label");
@@ -1062,14 +1094,16 @@
           unpriced: item.__vue__._props.inline,
         }));
 
-      if (PageState.addKillstreaks) {
-        mappedItems = mappedItems.flatMap((item) => [
-          item,
-          ...generateKillstreaks(item.name).map((name) => ({
-            name,
-            unpriced: item.unpriced,
-          })),
-        ]);
+      if (Settings.data.isKillstreakChecked) {
+        mappedItems = mappedItems.flatMap((item) => {
+          return [
+            item,
+            ...generateKillstreaks(item.name).map((name) => ({
+              name,
+              unpriced: item.unpriced,
+            })),
+          ];
+        });
       }
 
       return mappedItems;
@@ -1200,9 +1234,14 @@
   function renderSettingsFormNext() {
     return `
       <label for="manageContext">Choose Your Bot</label>
-      <select id="manageContext" name="manageContext" class="form-control w-fit">
+      <select id="manageContext" name="manageContext"  class="form-control w-fit">
         ${Object.entries(Settings.data.bots)
-          .map(([name, id]) => `<option value="${id}">${name}</option>`)
+          .map(
+            ([name, id]) =>
+              `<option value="${id}" ${
+                Settings.data.manageContext === id ? "selected" : ""
+              }>${name}</option>`
+          )
           .join("")}
       </select>
     `;
@@ -1247,9 +1286,10 @@
       Settings.data.manageContext = form.manageContext.value;
       await Settings.save();
       Modal.close();
+      location.reload();
     });
     button.addEventListener("click", () => {
-      Modal.render("Gladiator.tf Settings", form.outerHTML, submitButton);
+      Modal.render("Gladiator.tf Settings", form, submitButton);
     });
 
     node.prepend(button);
@@ -1257,10 +1297,20 @@
 
   function getPricelistItemNames() {
     const rows = [...document.querySelectorAll("tbody tr")];
-    const itemNames = rows.map((row) => {
+    let itemNames = rows.map((row) => {
       const firstCell = row.childNodes[0];
       return firstCell.__vue__._props.rowData.item.name;
     });
+
+    if (Settings.data.isKillstreakChecked) {
+      console.log("Adding killstreaks");
+      itemNames = itemNames.flatMap((item) => {
+        console.log("Adding killstreaks", item, generateKillstreaks(item));
+
+        return [item, ...generateKillstreaks(item)];
+      });
+    }
+
     return itemNames;
   }
 
@@ -1285,9 +1335,12 @@
       }
     });
 
+    const ksCheckbox = createKillstreakCheckbox();
+
     const container = createButtonWrapperNext([
       button,
       addAllCurrentPageButton,
+      ksCheckbox,
     ]);
 
     node.appendChild(container);
@@ -1326,57 +1379,36 @@
       found.append(container);
     }
   }
-  function addLinksNext() {
-    const statsItem = document.querySelector(
-      ".card__content .header div .align-items-start > div"
-    );
 
-    if (statsItem) {
-      addStatsButtonNext(statsItem);
-    }
-
-    const itemsPage = document.querySelector(
-      ".card__content > .align-items-center"
-    );
-    if (itemsPage) {
-      addAddAllButtonNext(itemsPage.parentNode);
-    }
-
-    const pricelistPage = document.querySelector(".card__content .container");
-    if (pricelistPage) {
-      addPricelistButtonsNext(pricelistPage);
-    }
-
-    function isEffectOrItemPage(url) {
-      // only show on individual effect/item pages
-      return (
-        (url.pathname.startsWith("/effects/") &&
-          url.pathname.length > "/effects/".length) ||
-        (url.pathname.startsWith("/items/") &&
-          url.pathname.length > "/items/".length)
+  function addPrerendedButtonsNext() {
+    if (PageState.currentPage === "stats") {
+      const statsItem = document.querySelector(
+        ".card__content .header div .align-items-start > div"
       );
-    }
 
+      if (statsItem) {
+        addStatsButtonNext(statsItem);
+      }
+    } else if (PageState.currentPage === "items") {
+      const itemsPage = document.querySelector(
+        ".card__content > .align-items-center"
+      );
+      if (itemsPage) {
+        addAddAllButtonNext(itemsPage.parentNode);
+      }
+    } else if (PageState.currentPage === "pricelist") {
+      const pricelistPage = document.querySelector(".card__content .container");
+      if (pricelistPage) {
+        addPricelistButtonsNext(pricelistPage);
+      }
+    }
+  }
+
+  function addLinksNext() {
+    addPrerendedButtonsNext();
     function navigationHandler(e) {
       const url = new URL(e?.destination?.url || window.location.href);
-
-      switch (true) {
-        case url.pathname === "/stats":
-          PageState.currentPage = "stats";
-          break;
-        case url.pathname === "/classifieds":
-          PageState.currentPage = "classified";
-          break;
-        case isEffectOrItemPage(url):
-          PageState.currentPage = "items";
-          break;
-        case url.pathname === "/pricelist":
-          PageState.currentPage = "pricelist";
-          break;
-        default:
-          PageState.currentPage = "";
-          break;
-      }
+      computeCurrentPage(url.pathname);
     }
 
     function dropdownObserver(mutationsList) {
@@ -1454,6 +1486,7 @@
         }
 
         for (const node of mutation.removedNodes) {
+          if (PageState.currentPage !== "pricelist") continue;
           const isLoadingOverlay = node.classList?.contains(
             "p-datatable-loading-overlay"
           );
@@ -1516,10 +1549,18 @@
     let nonItemRegex = new RegExp(
       /(Non-Craftable)|(Unusual)|(Strange)|(Normal)|(Unique)|(Genuine)|(Vintage)|(Collector's) (Australium )?/g
     );
+
     let ks = [];
     let itemName = baseName.replace(nonItemRegex, "").trim();
+
     let nonItemName = baseName.replace(itemName, "");
     itemName = itemName.replace("The ", "");
+
+    // Use base item name
+    if (!WEAPONS.includes(itemName)) {
+      return [];
+    }
+
     ks.push(`${nonItemName}Professional Killstreak ${itemName}`);
     ks.push(`${nonItemName}Specialized Killstreak ${itemName}`);
     ks.push(`${nonItemName}Killstreak ${itemName}`);
