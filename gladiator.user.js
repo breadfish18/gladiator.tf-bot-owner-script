@@ -414,15 +414,6 @@
     ]);
   }
 
-  function isEffectOrItemPage(pathname) {
-    // only show on individual effect/item pages
-    return (
-      (pathname.startsWith("/effects/") &&
-        pathname.length > "/effects/".length) ||
-      (pathname.startsWith("/items/") && pathname.length > "/items/".length)
-    );
-  }
-
   function computeCurrentPage(pathname) {
     PageState.paginating = false;
 
@@ -433,7 +424,11 @@
       case pathname === "/classifieds":
         PageState.currentPage = "classified";
         break;
-      case isEffectOrItemPage(pathname):
+      case pathname.startsWith("/effects/") &&
+        pathname.length > "/effects/".length:
+        PageState.currentPage = "effects";
+        break;
+      case pathname.startsWith("/items/") && pathname.length > "/items/".length:
         PageState.currentPage = "items";
         break;
       case pathname === "/pricelist":
@@ -1070,8 +1065,6 @@
     const addUnpricedButton = document.createElement("button");
     createGladiatorButton(addUnpricedButton, "Add Unpriced Items");
 
-    const checkboxContainer = modifierCheckboxes();
-
     addAllButton.addEventListener("click", () => {
       const items = getItems();
       if (items.length > 0) {
@@ -1096,10 +1089,14 @@
       }
     });
 
-    const container = createButtonWrapperNext(
-      [addPriceButton, addUnpricedButton, addAllButton, checkboxContainer],
-      "p-4"
-    );
+    let buttons = [addPriceButton, addUnpricedButton, addAllButton];
+
+    if (PageState.currentPage !== "effects") {
+      const checkboxContainer = modifierCheckboxes();
+      buttons.push(checkboxContainer);
+    }
+
+    const container = createButtonWrapperNext(buttons, "p-4");
 
     node.appendChild(container);
   }
@@ -1550,7 +1547,10 @@
       if (statsItem) {
         addStatsButtonNext(statsItem);
       }
-    } else if (PageState.currentPage === "items") {
+    } else if (
+      PageState.currentPage === "items" ||
+      PageState.currentPage === "effects"
+    ) {
       const itemsPage = document.querySelector(
         ".card__content > .align-items-center"
       );
@@ -1593,6 +1593,7 @@
                 }
                 break;
               case "items":
+              case "effects":
                 const itemsPage = node.querySelector(".card__content");
                 if (itemsPage) {
                   addAddAllButtonNext(itemsPage);
