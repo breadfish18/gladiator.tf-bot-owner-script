@@ -16,11 +16,12 @@
 
 // @homepageURL     https://github.com/gladiatortf/gladiator.tf-bot-owner-script/
 // @supportURL      https://github.com/gladiatortf/gladiator.tf-bot-owner-script/issues
+// @downloadURL     https://github.com/gladiatortf/gladiator.tf-bot-owner-script/raw/master/gladiator.user.js
 
 // @run-at       document-end
 // @match        https://backpack.tf/*
 // @match        https://next.backpack.tf/*
-// @match        https://gladiator.tf/*
+// @match        https://*.gladiator.tf/*
 
 // ==/UserScript==
 
@@ -815,7 +816,7 @@
         $addButton.on("click", () => {
           if ($check.is(":checked")) {
             const items = [...generateKillstreaks(itemName)];
-            if (items.length > 0) bulkAdd(items);
+            bulkAdd(items);
           }
         });
         $fieldset.append($check);
@@ -1067,26 +1068,22 @@
 
     addAllButton.addEventListener("click", () => {
       const items = getItems();
-      if (items.length > 0) {
-        bulkAdd(items.map((item) => item.name));
-      }
+
+      bulkAdd(items.map((item) => item.name));
     });
 
     addPriceButton.addEventListener("click", () => {
       const items = getItems();
       const pricedItems = items.filter((item) => !item.unpriced);
 
-      if (pricedItems.length > 0) {
-        bulkAdd(pricedItems.map((item) => item.name));
-      }
+      bulkAdd(pricedItems.map((item) => item.name));
     });
 
     addUnpricedButton.addEventListener("click", () => {
       const items = getItems();
       const unpricedItems = items.filter((item) => item.unpriced);
-      if (unpricedItems.length > 0) {
-        bulkAdd(unpricedItems.map((item) => item.name));
-      }
+
+      bulkAdd(unpricedItems.map((item) => item.name));
     });
 
     let buttons = [addPriceButton, addUnpricedButton, addAllButton];
@@ -1479,9 +1476,8 @@
 
     button.addEventListener("click", () => {
       const items = getItems();
-      if (items.length > 0) {
-        bulkAdd(items.map((item) => item.name));
-      }
+
+      bulkAdd(items.map((item) => item.name));
     });
     const addAllCurrentPageButton = document.createElement("button");
     createGladiatorButton(addAllCurrentPageButton, "Add All");
@@ -1727,16 +1723,26 @@
 
   async function bulkAdd(itemNames) {
     const context = Settings.data.manageContext;
-    const result = await gladiatorRequest(
-      `/api/bots/${context}/items/add`,
-      "POST",
-      {
-        "Content-Type": "application/json",
-      },
-      { items: itemNames }
-    );
+    let result;
+    try {
+      result = await gladiatorRequest(
+        `/api/bots/${context}/items/add`,
+        "POST",
+        {
+          "Content-Type": "application/json",
+        },
+        { items: itemNames }
+      );
+    } catch (error) {
+      Modal.render("Failed to add items, check console for more details.");
+      console.error("Failed to add items:", error);
+      return;
+    }
     const results = Object.entries(result.results);
-    if (!results.length) throw "No items added, are you logged into gladiator?";
+    if (!results.length) {
+      Modal.render("No items added, please check filters and try again.");
+      return;
+    }
 
     let failedAdds = [];
 
