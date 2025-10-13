@@ -304,6 +304,12 @@
         color: var(--component-text-color);
     }
 
+	.glad-stats-container {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+	}
+
   `;
 
 	const fieldset = `<fieldset class="glad-fieldset"><legend>Add to <span class="gladiator-bot-name">GladiatorTF Bot</span></legend><div class="btn-group btn-group-sm"> </div></fieldset>`;
@@ -1074,7 +1080,7 @@
 
 		const container = createButtonWrapperNext(
 			[button, addAllButton],
-			"pt-2"
+			"pt-2 glad-stats-container"
 		);
 
 		statsItem.appendChild(container);
@@ -1582,7 +1588,7 @@
 	function addPrerendedButtonsNext() {
 		if (PageState.currentPage === "stats") {
 			const statsItem = document.querySelector(
-				".card__content .header div .align-items-start > div"
+				".card__content .header div"
 			);
 
 			if (statsItem) {
@@ -1652,9 +1658,7 @@
 						PageState.currentPage === "stats" &&
 						node.classList?.contains("align-items-start")
 					) {
-						const statsItem = node.querySelector(
-							".align-items-start > div"
-						);
+						const statsItem = node.parentNode;
 						if (statsItem) {
 							addStatsButtonNext(statsItem);
 						}
